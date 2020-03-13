@@ -15,6 +15,7 @@ void setup()
 void loop()
 {
    delay(1000);
+   checkAll();
    createHistory(); 
   
   if(Serial.available() > 0){
@@ -41,47 +42,11 @@ void loop()
       str.remove(0, 9);
       setMaxHum(str.toInt());
     }
+ else if(str.startsWith("set detect ")) {
+   setMotionDetect(str.endsWith("on"));
+    }
   }
 
-  
-  
-  
-}
-
-void sendHeader(){
-  Serial.print("Arduino");
-  Serial.print("<br>");
-  Serial.print("------------------------");
-  Serial.print("<br>");
-}
-
-void sendInfo(){
-  float humd = myHumidity.readHumidity();
-  float temp = myHumidity.readTemperature();
-
-  sendHeader();
-  
-  Serial.print("  Temperature : ");
-  Serial.print(temp, 1);
-  Serial.print("C");
-  Serial.print("<br>");
-  Serial.print("  Humidity : ");
-  Serial.print(humd, 1);
-  Serial.print("%");
-  
-  Serial.print("<br>");
-  Serial.print("<br>");
-  Serial.print("Normal temperature : ");
-  Serial.print(getMinTemp());
-  Serial.print(" - ");
-  Serial.print(getMaxTemp());
-  Serial.print("<br>");
-  Serial.print("Normal humidity : ");
-  Serial.print(getMinHum());
-  Serial.print(" - ");
-  Serial.print(getMaxHum());
-
-  Serial.println();
 }
 
 /*-----------------------------------------*/
@@ -128,9 +93,54 @@ void setMaxHum(int val){
   EEPROM.put( 6, val );
 }
 
-/*-------------------------------------*/
-// history & check
-/*-------------------------------------*/
+void setMotionDetect(bool detect){
+ EEPROM.write( 7,  detect ? 1 : 0);
+}
+
+bool getMotionDetect(){ 
+ return EEPROM.read(7) == 1;
+}
+
+/*-----------------------------------------*/
+// send to port
+/*-----------------------------------------*/
+
+void sendHeader(){
+  Serial.print("Arduino");
+  Serial.print("<br>");
+  Serial.print("------------------------");
+  Serial.print("<br>");
+}
+
+void sendInfo(){
+  float humd = myHumidity.readHumidity();
+  float temp = myHumidity.readTemperature();
+
+  sendHeader();
+  
+  Serial.print("  Temperature : ");
+  Serial.print(temp, 1);
+  Serial.print("C");
+  Serial.print("<br>");
+  Serial.print("  Humidity : ");
+  Serial.print(humd, 1);
+  Serial.print("%");
+  
+  Serial.print("<br>");
+  Serial.print("<br>");
+  Serial.print("Normal temperature : ");
+  Serial.print(getMinTemp());
+  Serial.print(" - ");
+  Serial.print(getMaxTemp());
+  Serial.print("<br>");
+  Serial.print("Normal humidity : ");
+  Serial.print(getMinHum());
+  Serial.print(" - ");
+  Serial.print(getMaxHum());
+
+  Serial.println();
+}
+
 void sendChk(String ht, float crr, int chk){
    Serial.print("Current ");
    Serial.print(ht);
@@ -145,17 +155,86 @@ void sendChk(String ht, float crr, int chk){
    Serial.println();
 }
 
+void sendMotionInfo(bool motion){
+ sendHeader();
+ if (motion)
+  Serial.print("Motion detected!");
+ else 
+  Serial.print("Motion disappeared!");
+    Serial.println();
+}
+
+void sendOnMotionComand(){
+ Serial.print("<cmd>photo");
+    Serial.println();
+}
+
+/*-------------------------------------*/
+// check 
+/*-------------------------------------*/
+void checkAll(){
+ checkMotion();
+ checkTemperature();
+ checkHumidity();
+}
+
+int MOTION_PIN = 2;
+bool prevMotion = false;
+void checkMotion(){
+ if (!getMotionDetect())
+    return;
+ 
+ bool motion = digitalRead(MOTION_PIN) == HIGH ;
+ Serial.print(motion?"true":"false");
+ Serial.println();
+ if (motion != prevMotion)
+  sendMotionInfo(motion);
+ 
+ if (motion)
+  sendOnMotionComand();
+ 
+ prevMotion = motion;
+}
+
+float prevT = 0.0;
+void checkTemperature(){
+ float crrT = myHumidity.readTemperature();
+ int chkVal;
+    chkVal = getMinTemp();
+    if( !isnan(chkVal) &&  crrT < chkVal && prevT > chkVal)
+       sendChk("temperature", crrT, chkVal);
+    
+    chkVal = getMaxTemp();
+    if( !isnan(chkVal) &&  crrT > chkVal && prevT < chkVal)
+       sendChk("temperature", crrT, chkVal);
+   
+    prevT = crrT;
+}
+
+float prevH = 0.0;
+void checkHumidity(){
+ float crrH = myHumidity.readHumidity();
+ int chkVal = getMinHum();
+    if( !isnan(chkVal) &&  crrH < chkVal && prevH > chkVal)
+       sendChk("humidity", prevH, chkVal);
+    
+    chkVal = getMaxHum();
+    if( !isnan(chkVal) &&  crrH > chkVal && prevH < chkVal)
+       sendChk("humidity", prevH, chkVal);
+    
+    prevH = crrH;
+}
+
+/*-------------------------------------*/
+// history 
+/*-------------------------------------*/
+
 unsigned long lastHistoryTime = 0;
 byte historyHourCnt = 0;
 float hourT = 0.0;
 float hourH = 0.0;
 int historyT[24] = {-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000};
 int historyH[24] = {-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000};
-float prevT = 0.0;
-float prevH = 0.0;
-
-
-
 
 void createHistory(){
  
@@ -166,32 +245,10 @@ void createHistory(){
 
     float crrT = myHumidity.readTemperature();
     float crrH = myHumidity.readHumidity();
-
-    //check
-    int chkVal;
-    chkVal = getMinTemp();
-    if( !isnan(chkVal) &&  crrT < chkVal && prevT > chkVal)
-       sendChk("temperature", crrT, chkVal);
-    
-    chkVal = getMaxTemp();
-    if( !isnan(chkVal) &&  crrT > chkVal && prevT < chkVal)
-       sendChk("temperature", crrT, chkVal);
-
-    chkVal = getMinHum();
-    if( !isnan(chkVal) &&  crrH < chkVal && prevH > chkVal)
-       sendChk("humidity", crrT, chkVal);
-    
-    chkVal = getMaxHum();
-    if( !isnan(chkVal) &&  crrH > chkVal && prevH < chkVal)
-       sendChk("humidity", crrT, chkVal);
-    
-    prevT = crrT;
-    prevH = crrH;
     
     // history    
     hourH = hourH + crrH;
     hourT = hourT + crrT;
-
    
     if (historyHourCnt == 6){
         historyHourCnt = 0;
