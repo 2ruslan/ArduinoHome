@@ -5,9 +5,16 @@
 
 HTU21D myHumidity;
 
+int MOTION_PIN = 2;
+int RELE_PIN = 4;
+
 void setup()
 {
   Serial.begin(9600);
+
+   pinMode(RELE_PIN, OUTPUT); 
+   pinMode(MOTION_PIN, INPUT); 
+   
 
   myHumidity.begin();
 }
@@ -42,8 +49,11 @@ void loop()
       str.remove(0, 9);
       setMaxHum(str.toInt());
     }
- else if(str.startsWith("set detect ")) {
-   setMotionDetect(str.endsWith("on"));
+    else if(str.startsWith("set detect ")) {
+       setMotionDetect(str.endsWith("on"));
+    }
+    else if(str.startsWith("set rele ")) {
+       setRele(str.endsWith("on"));
     }
   }
 
@@ -100,6 +110,16 @@ void setMotionDetect(bool detect){
 bool getMotionDetect(){ 
  return EEPROM.read(7) == 1;
 }
+
+void setRele(bool on){
+ EEPROM.write( 8,  on ? 1 : 0);
+}
+
+bool getRele(){ 
+ return EEPROM.read(8) == 1;
+}
+
+
 
 /*-----------------------------------------*/
 // send to port
@@ -174,11 +194,14 @@ void sendOnMotionComand(){
 /*-------------------------------------*/
 void checkAll(){
  checkMotion();
+ checkRele();
  checkTemperature();
  checkHumidity();
 }
 
-int MOTION_PIN = 2;
+
+
+
 bool prevMotion = false;
 void checkMotion(){
  if (!getMotionDetect())
@@ -194,6 +217,17 @@ void checkMotion(){
   sendOnMotionComand();
  
  prevMotion = motion;
+}
+
+bool crrReleState =false;
+void checkRele(){
+  bool state = getRele()|| prevMotion;
+  Serial.print(state);
+    Serial.println();
+  if (crrReleState != state){
+    digitalWrite(RELE_PIN, state ? HIGH : LOW);
+    crrReleState = state;
+  }
 }
 
 float prevT = 0.0;
@@ -238,7 +272,7 @@ int historyH[24] = {-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,-1000,
 
 void createHistory(){
  
-   if (millis() - lastHistoryTime > 600000 /*10min*/){
+   if (millis() - lastHistoryTime >= 600000 /*10min*/){
     lastHistoryTime = millis();
     
     historyHourCnt++;
