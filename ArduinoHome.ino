@@ -49,12 +49,20 @@ void loop()
       str.remove(0, 9);
       setMaxHum(str.toInt());
     }
-    else if (str.startsWith("set detect ")) {
-      setMotionDetect(str.endsWith("on"));
-    }
+
     else if (str.startsWith("set rele ")) {
       setRele(str.endsWith("on"));
     }
+    else if (str.startsWith("set cmdphoto ")) {
+      setCmdPhoto(str.endsWith("on"));
+    }
+    else if (str.startsWith("start")) {
+      setWork(true);
+    }
+    else if (str.startsWith("stop")) {
+      setWork(false);
+    }
+
   }
 
 }
@@ -103,14 +111,6 @@ void setMaxHum(int val) {
   EEPROM.put( 6, val );
 }
 
-void setMotionDetect(bool detect) {
-  EEPROM.write( 7,  detect ? 1 : 0);
-}
-
-bool getMotionDetect() {
-  return EEPROM.read(7) == 1;
-}
-
 void setRele(bool on) {
   EEPROM.write( 8,  on ? 1 : 0);
 }
@@ -119,8 +119,20 @@ bool getRele() {
   return EEPROM.read(8) == 1;
 }
 
+void setWork(bool on) {
+  EEPROM.write( 9,  on ? 1 : 0);
+}
 
+bool getWork() {
+  return EEPROM.read(9) == 1;
+}
+void setCmdPhoto(bool on) {
+  EEPROM.write( 10,  on ? 1 : 0);
+}
 
+bool getCmdPhoto() {
+  return EEPROM.read(10) == 1;
+}
 /*-----------------------------------------*/
 // send to port
 /*-----------------------------------------*/
@@ -204,7 +216,7 @@ void checkAll() {
 
 bool prevMotion = false;
 void checkMotion() {
-  if (!getMotionDetect())
+  if (!getWork())
     return;
 
   bool motion = digitalRead(MOTION_PIN) == HIGH ;
@@ -212,7 +224,7 @@ void checkMotion() {
   if (motion != prevMotion)
     sendMotionInfo(motion);
 
-  if (motion)
+  if (motion && getCmdPhoto())
     sendOnMotionComand();
 
   prevMotion = motion;
